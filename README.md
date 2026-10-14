@@ -1,6 +1,6 @@
 # OpenSpec
 
-This repo stores **OpenSpec** specifications to manage architectural changes and features, and stores these as artifacts in the repository.
+This repo stores **OpenSpec** specifications to manage architectural changes and features. Currently, changes are mostly Workflows-centered.
 
 ## What is OpenSpec?
 
