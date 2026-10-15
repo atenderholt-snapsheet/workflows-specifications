@@ -44,6 +44,12 @@ Verify installation:
 openspec --version
 ```
 
+Get a copy of this store:
+```bash
+git clone git@github.com:atenderholt-snapsheet/workflows-specifications.git ~/openspec/workflows-specifications
+openspec store register ~/openspec/workflows-specifications
+```
+
 Install AI skills:
 ```bash
 openspec init
