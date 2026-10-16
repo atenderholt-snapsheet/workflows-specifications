@@ -27,7 +27,7 @@ See proposal.md. Today the QAP object list is built client-side; the workflow li
 
 **3. Sort** is object type position, then label ascending (case-insensitive). Types are never interleaved. Sorting is selected by a named sort keyword that the server maps to ES sort clauses (a `_script` sort over `object_type` with an ordered type list, then `label`). Callers and UI pass only the keyword, never ES details, so adding or changing a sort needs no reindex. Default keyword orders claim, exposure, litigation. Initial alternative: claim, litigation, exposure. Alternative rejected: a stored rank field per ordering; each new ordering would need a mapping change and reindex.
 
-**4. Filter semantics.** Object matches if ANY nested workflow matches. `inner_hits` flags which workflows matched. Status and stage name filters are one nested clause, so a single workflow must satisfy both (a started workflow in Intake plus a cancelled one in Review does not match status=started with stage=Review); this also keeps the `matched` flag meaningful. State defaults to `started` when no state filter is given, so objects without started workflows are hidden by default (frontend must handle a preselected object that is absent).
+**4. Filter semantics.** Object matches if ANY nested workflow matches. `inner_hits` flags which workflows matched. `workflow_status` and `workflow_stage_name` filters are one nested clause, so a single workflow must satisfy both (a started workflow in Intake plus a cancelled one in Review does not match workflow_status=started with workflow_stage_name=Review); this also keeps the `matched` flag meaningful. `workflow_status` defaults to `started` when it is not given, so objects without started workflows are hidden by default (frontend must handle a preselected object that is absent).
 
 **5. Label locale** is the provider default locale, stored at index time; not altered on response.
 
@@ -45,9 +45,9 @@ Sequencing: this only needs deciding before the signalling task; the document, q
 
 **7. Rake tasks:** `reindex all` and `reindex batch` (by id/time window); both enqueue the same identity-only job.
 
-**8. Facets.** The response carries aggregations for object type, workflow status and workflow stage. Counts are objects, not workflows (nested aggregation + `reverse_nested`). Each facet applies the termed query, scoping and every filter except its own, so selecting one value still shows the alternatives and the status facet reveals non-`started` counts despite the default filter. Because status and stage are matched on the same workflow (Decision 4), the status facet counts only workflows in the filtered stages and the stage facet only workflows with the filtered statuses, so a facet count equals the result count after picking it. Facets cover the whole matching set, not the current page; each is a `global` aggregation that re-applies scope, term and the other filters, so the hit query and its `inner_hits` stay unchanged and it is one round trip. Alternative rejected: separate facet endpoint; extra round trip and counts can disagree with the page.
+**8. Facets.** The response carries aggregations keyed `object_type`, `workflow_status` and `workflow_stage_name`. `object_type` describes the object itself; the other two describe its workflows. Counts are objects, not workflows (nested aggregation + `reverse_nested`): a count is the number of objects with at least one workflow having that value. Each facet applies the termed query, scoping and every filter except its own, so selecting one value still shows the alternatives and the status facet reveals non-`started` counts despite the default filter. Because status and stage are matched on the same workflow (Decision 4), the status facet counts only workflows in the filtered stages and the stage facet only workflows with the filtered statuses, so a facet count equals the result count after picking it. Facets cover the whole matching set, not the current page; each is a `global` aggregation that re-applies scope, term and the other filters, so the hit query and its `inner_hits` stay unchanged and it is one round trip. Alternative rejected: separate facet endpoint; extra round trip and counts can disagree with the page.
 
-**9. Stage facet and filter key on stage name.** Stage names can repeat across workflow definitions; same-named stages merge into one bucket, and an object counts once if any of its workflows is in a stage of that name. The stage filter matches by name. Workflow label is not a separate facet.
+**9. The `workflow_stage_name` facet and filter key on stage name.** Stage names can repeat across workflow definitions; same-named stages merge into one bucket, and an object counts once if any of its workflows is in a stage of that name. The filter matches by name. Workflow label is not a separate facet.
 
 **10. Termed query fields.** The term matches object `label`, `description` and nested workflow `label`.
 
@@ -56,7 +56,7 @@ Sequencing: this only needs deciding before the signalling task; the document, q
 **12. Endpoint contract.** `GET /api/v2/workflow_objects` in `Api::V2`, flat like other V2 index endpoints (no nested claim path). Params:
 - `filter[claim_id]` required; the claim must belong to the requesting provider (otherwise 404).
 - `filter[query]` termed query, default `*`. Kept under `filter[...]` with the other caller input.
-- `filter[object_type]`, `filter[status]`, `filter[stage_name]`: comma separated or repeated. Unknown object types or statuses are a 400. Status defaults to `started` (Decision 4).
+- `filter[object_type]`, `filter[workflow_status]`, `filter[workflow_stage_name]`: comma separated or repeated. Unknown object types or workflow statuses are a 400. `workflow_status` defaults to `started` (Decision 4). The `workflow_` prefix marks the filters that apply to an object's workflows rather than the object itself.
 - `sort`: a named keyword, `claim_exposure_litigation` (default) or `claim_litigation_exposure`; unknown is a 400. The keyword-to-type-order mapping lives in `WorkflowsIntegration::ObjectSearchParams::SORT_ORDERS`, so adding an order needs no reindex.
 - `page[number]`, `page[size]` with the V2 default (25) and maximum (50), as other V2 controllers.
 
@@ -71,7 +71,7 @@ Authorization reuses the engine's `WorkflowsPermissionsConcern` (Viceroy `Workfl
 - Label sources outside the object (vehicle, claimant) may not touch the object's `updated_at` → explicit listeners on those models.
 - Non-ASCII labels sort by code point in a lowercase keyword → accepted unless a collation analyzer is needed per provider locale.
 - Script sort adds per-query cost → acceptable at ~1000 docs scoped to one claim.
-- Default `started` filter hides objects with none → frontend fallback required.
+- Default `workflow_status=started` filter hides objects with none → frontend fallback required.
 - Index job runs on its own Delayed Job queue (`vice.sneakers.workflow_object_indexing_queue`), not the shared policy ES queue, so bursts don't block policy indexing and the policy queue purge rake task doesn't delete these jobs. A Delayed Job queue name only isolates work if workers are started with `--queues`. Future extension: move to an SQS ActiveJob queue (precedent: `ElasticsearchSlowIndexJob`, `config/aws_sqs_active_job_queues.yml`, queue creation in `cdktf/environmentStack.ts`, own retry handling) if volume or blocking shows up. The single reindex seam (task 3.1) means only the enqueue target changes.
 
 ## Open Questions

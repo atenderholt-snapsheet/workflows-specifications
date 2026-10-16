@@ -27,33 +27,33 @@ The endpoint SHALL accept a termed query that defaults to `*` (match all).
 - **THEN** the object is returned
 
 ### Requirement: Filters
-The endpoint SHALL support `filter[...]` on object type, workflow status and workflow stage. An object SHALL match a workflow filter if any of its workflows matches.
+The endpoint SHALL support `filter[object_type]`, `filter[workflow_status]` and `filter[workflow_stage_name]`. `object_type` describes the object itself; the `workflow_` filters describe the object's workflows. An object SHALL match a workflow filter if any of its workflows matches.
 
 #### Scenario: Any workflow matches
-- **WHEN** an object has one `started` and one `cancelled` workflow and the status filter is `cancelled`
+- **WHEN** an object has one `started` and one `cancelled` workflow and the `workflow_status` filter is `cancelled`
 - **THEN** the object is returned
 
 #### Scenario: Stage filter by name
-- **WHEN** the stage filter is a stage name used by workflows of two different definitions
+- **WHEN** the `workflow_stage_name` filter is a stage name used by workflows of two different definitions
 - **THEN** objects with a workflow in a stage of that name are returned, regardless of definition
 
 #### Scenario: Object type filter
 - **WHEN** the object type filter is `exposure`
 - **THEN** no claim or litigation objects are returned
 
-### Requirement: Default state filter
-When no workflow status filter is supplied, the endpoint SHALL behave as if the status filter were `started`. Other statuses (`created`, `failed_to_start`, `cancelled`) SHALL be returned only when explicitly filtered.
+### Requirement: Default workflow status filter
+When `filter[workflow_status]` is not supplied, the endpoint SHALL behave as if it were `started`. Other statuses (`created`, `failed_to_start`, `cancelled`) SHALL be returned only when explicitly filtered.
 
 #### Scenario: Default hides non-started
-- **WHEN** no status filter is supplied and an object has only a `cancelled` workflow
+- **WHEN** no `workflow_status` filter is supplied and an object has only a `cancelled` workflow
 - **THEN** the object is not returned
 
 #### Scenario: Object with no workflows
-- **WHEN** no status filter is supplied and an object has no workflows
+- **WHEN** no `workflow_status` filter is supplied and an object has no workflows
 - **THEN** the object is not returned
 
 #### Scenario: Explicit expansion
-- **WHEN** the status filter explicitly includes `cancelled`
+- **WHEN** the `workflow_status` filter explicitly includes `cancelled`
 - **THEN** objects with a `cancelled` workflow are returned
 
 ### Requirement: Sorting
@@ -76,23 +76,23 @@ Results SHALL be grouped by object type and sorted by object label ascending, ca
 - **THEN** the request is rejected with a client error
 
 ### Requirement: Available filters
-The response SHALL include facets for object type, workflow status and workflow stage, each value with a count of matching objects (not workflows). Each facet SHALL be computed from the termed query, the claim/provider scope and every active filter except its own filter. Facets SHALL cover all matches, not only the current page.
+The response SHALL include facets keyed `object_type`, `workflow_status` and `workflow_stage_name`, each value with a count of matching objects (not workflows): the number of objects with at least one workflow having that value. Each facet SHALL be computed from the termed query, the claim/provider scope and every active filter except its own filter. Facets SHALL cover all matches, not only the current page.
 
 #### Scenario: Facets returned
 - **WHEN** a client searches a claim's objects
-- **THEN** the response includes object type, workflow status and workflow stage facets with object counts alongside the documents
+- **THEN** the response includes `object_type`, `workflow_status` and `workflow_stage_name` facets with object counts alongside the documents
 
 #### Scenario: Facet ignores its own filter
 - **WHEN** the object type filter is `exposure`
 - **THEN** the object type facet still reports counts for claim and litigation
 
 #### Scenario: Default status hides, facet reveals
-- **WHEN** no status filter is supplied and an object has only a `cancelled` workflow
-- **THEN** that object is not in the documents, but the status facet still reports it under `cancelled`
+- **WHEN** no `workflow_status` filter is supplied and an object has only a `cancelled` workflow
+- **THEN** that object is not in the documents, but the `workflow_status` facet still reports it under `cancelled`
 
 #### Scenario: Same-named stages merge
 - **WHEN** workflows from two different definitions each have a stage named `Review`
-- **THEN** the stage facet has one `Review` bucket counting each matching object once
+- **THEN** the `workflow_stage_name` facet has one `Review` bucket counting each matching object once
 
 #### Scenario: Object counted once
 - **WHEN** an object has two `started` workflows
