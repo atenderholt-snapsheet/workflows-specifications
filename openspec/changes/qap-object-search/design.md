@@ -21,7 +21,7 @@ See proposal.md. Today the QAP object list is built client-side; the workflow li
 
 ## Decisions
 
-**1. One document per object, workflows nested.** Doc id = object global id. Fields: `provider_id`, `claim_id`, `object_type`, `label` (+ lowercase keyword subfield), `description`, `workflows[]` {`id`, `label`, `status`, `stage_id`, `stage_name`}. Alternative rejected: one doc per claim with nested objects; ES cannot paginate nested objects.
+**1. One document per object, workflows nested.** Doc id = object type + id (`exposure-5`; ids overlap across types). Fields: `provider_code` (keyword; requests are scoped by provider code), `claim_id`, `object_type`, `label` (+ lowercase keyword subfield), `description`, `workflows[]` {`id`, `label`, `status`, `stage_id`, `stage_name`}. Alternative rejected: one doc per claim with nested objects; ES cannot paginate nested objects.
 
 **2. Identity-only signals.** Messages carry object id only. The job loads the record from the DB, then writes to ES. Deltas/state in messages caused stale docs on the previous team.
 
@@ -53,6 +53,15 @@ Sequencing: this only needs deciding before the signalling task; the document, q
 
 **11. Paging** is `from/size` via JSON:API `page[number]` / `page[size]`. At ~1000 objects per claim this stays well under the ES 10k window, so `search_after` is not needed.
 
+**12. Endpoint contract.** `GET /api/v2/workflow_objects` in `Api::V2`, flat like other V2 index endpoints (no nested claim path). Params:
+- `filter[claim_id]` required; the claim must belong to the requesting provider (otherwise 404).
+- `filter[query]` termed query, default `*`. Kept under `filter[...]` with the other caller input.
+- `filter[object_type]`, `filter[status]`, `filter[stage_name]`: comma separated or repeated. Unknown object types or statuses are a 400. Status defaults to `started` (Decision 4).
+- `sort`: a named keyword, `claim_exposure_litigation` (default) or `claim_litigation_exposure`; unknown is a 400. The keyword-to-type-order mapping lives in `WorkflowsIntegration::ObjectSearchParams::SORT_ORDERS`, so adding an order needs no reindex.
+- `page[number]`, `page[size]` with the V2 default (25) and maximum (50), as other V2 controllers.
+
+Authorization reuses the engine's `WorkflowsPermissionsConcern` (Viceroy `WorkflowManagement` `view` rule from the user's workflows permissions), so it matches the existing QAP endpoints by construction. A client application (HMAC) has no workflows permissions and gets 403. Invalid params raise `Exceptions::InvalidWorkflowObjectSearchParam`, rescued centrally in `ApplicationController` as a 400. Alternative rejected: hosting under `/workflows/v1/` on `WorkflowsBaseController`, which would share auth with the engine endpoints automatically but away from the V2 conventions the frontend uses for claim data.
+
 ## Risks / Trade-offs
 
 - Aggregations add per-query cost → acceptable at ~1000 docs scoped to one claim.
@@ -63,9 +72,8 @@ Sequencing: this only needs deciding before the signalling task; the document, q
 - Non-ASCII labels sort by code point in a lowercase keyword → accepted unless a collation analyzer is needed per provider locale.
 - Script sort adds per-query cost → acceptable at ~1000 docs scoped to one claim.
 - Default `started` filter hides objects with none → frontend fallback required.
+- Index job runs on its own Delayed Job queue (`vice.sneakers.workflow_object_indexing_queue`), not the shared policy ES queue, so bursts don't block policy indexing and the policy queue purge rake task doesn't delete these jobs. A Delayed Job queue name only isolates work if workers are started with `--queues`. Future extension: move to an SQS ActiveJob queue (precedent: `ElasticsearchSlowIndexJob`, `config/aws_sqs_active_job_queues.yml`, queue creation in `cdktf/environmentStack.ts`, own retry handling) if volume or blocking shows up. The single reindex seam (task 3.1) means only the enqueue target changes.
 
 ## Open Questions
 
-- Exact JSON:API param names (`filter[...]`, `page[...]`, `sort`, termed query default `*`): align with existing V2 controllers.
 - Reconciler cadence and staleness bound (only if option B).
-- Sort keyword names and where the keyword-to-sort mapping lives.
