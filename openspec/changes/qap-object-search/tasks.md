@@ -22,13 +22,13 @@
 ## 5. Search endpoint
 
 - [x] 5.1 Align parameter naming and routing with existing V2 controllers (`filter[...]`, `page[number]`/`page[size]`, `sort`, termed query defaulting to `*`); add the route and controller using the same authorization as the current QAP endpoints. Verify with request specs for allowed and rejected users.
-- [ ] 5.2 Query builder: scope to claim and provider; termed query over object `label`, `description` and nested workflow `label`. Verify specs for no term, a matching term and a workflow-label term.
-- [ ] 5.3 Filters: object type, workflow status and workflow stage name, with any-nested-workflow-matches semantics; default status `started` when none is given; litigations removed when `enable_litigations` is off. Verify specs for each scenario in the search spec, including no-workflow and cancelled-only objects.
-- [ ] 5.4 Response contents: id, type, label, description and nested workflows with status, stage and a `matched` flag from `inner_hits`. Verify a spec where one of two workflows matches.
-- [ ] 5.5 Sorting: named sort keywords mapped server-side to a type-order script sort, then `label` keyword; default claim, exposure, litigation; second keyword claim, litigation, exposure; unknown keyword returns a client error. Verify specs for default order, alternate order, no interleaving and the error.
-- [ ] 5.6 Facets: object type, workflow status and workflow stage name, counting objects (nested + `reverse_nested`), each facet applying every filter except its own; same-named stages from different workflows merge into one bucket; facets cover all matches, not the page. Verify specs for each facet scenario in the search spec.
-- [ ] 5.7 Pagination with total count. Verify a spec with more objects than the page size.
-- [ ] 5.8 Document the endpoint under `docs/api/oas3/v2/` and note the index and rake tasks in the relevant README. Verify the docs render and match the specs.
+- [x] 5.2 Query builder: scope to claim and provider; termed query over object `label`, `description` and nested workflow `label`. Verify specs for no term, a matching term and a workflow-label term.
+- [x] 5.3 Filters: object type, workflow status and workflow stage name, with any-nested-workflow-matches semantics; default status `started` when none is given; litigations removed when `enable_litigations` is off. Verify specs for each scenario in the search spec, including no-workflow and cancelled-only objects.
+- [x] 5.4 Response contents: id, type, label, description and nested workflows with status, stage and a `matched` flag from `inner_hits`. Verify a spec where one of two workflows matches.
+- [x] 5.5 Sorting: named sort keywords mapped server-side to a type-order script sort, then `label` keyword; default claim, exposure, litigation; second keyword claim, litigation, exposure; unknown keyword returns a client error. Verify specs for default order, alternate order, no interleaving and the error.
+- [x] 5.6 Facets: object type, workflow status and workflow stage name, counting objects (nested + `reverse_nested`), each facet applying every filter except its own; same-named stages from different workflows merge into one bucket; facets cover all matches, not the page. Verify specs for each facet scenario in the search spec.
+- [x] 5.7 Pagination with total count. Verify a spec with more objects than the page size.
+- [x] 5.8 Document the endpoint under `docs/api/oas3/v2/` and note the index and rake tasks in the relevant README. Verify the docs render and match the specs.
 
 ## 6. Verification
 
@@ -36,3 +36,4 @@
 - [ ] 6.2 Verify provider isolation: a provider with `enable_litigations` off never sees litigations in documents or facets, while another provider does.
 - [ ] 6.3 Verify that signal failure does not affect the main work (stop ES or the queue, advance a stage, confirm the stage change commits) and that pending signals survive a restart.
 - [ ] 6.4 Hand the final contract (params, sort keywords, facets, absent-default-object case) to the vice-frontend ticket.
+- [ ] 6.5 Follow-up, not part of this change: decide the exposure object label and create a new change for it (`openspec new change`). Today the indexed label is `ObjectService#name` only (e.g. `Subaru Legacy  `, with trailing spaces when year or registration is empty), while the QAP shows the name plus a frontend-added coverage suffix (e.g. `Subaru Legacy - Unknown Coverage`). Decide: (a) index the full display label including coverage, (b) index coverage as a separate field and let the frontend compose, or (c) leave the label as is. Also decide whitespace normalization, the backend rule for the coverage fallback and locale, `coverage_assignment.premium_class` as a reindex trigger, and whether the suffix applies when `enable_exposure_name_update` is on. Confirm the frontend's actual rule first.
